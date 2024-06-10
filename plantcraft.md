@@ -22,6 +22,28 @@
 
 - Something clever with water?
 
+#### Earth blocks: hydrology
+
+The challenge with Earth blocks is to model the hydrology: the
+movement of water through Earth blocks
+
+Parameters:
+- An Earth block has two parameters:
+  1. The water content; an integer.
+  2. The water pressure; an integer. 
+
+Global variables are:
+- Tick rate: how many world ticks before earth blocks are updated
+- Saturation level: the maximum water content per block
+- Permeability: 
+
+
+
+
+##### Optimisation
+
+
+
 
 ### Plant blocks (“biology”)
 

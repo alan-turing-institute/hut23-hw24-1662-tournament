@@ -131,4 +131,58 @@ exiting into Air will be lost, but won't in fact happen very often.)
 If the face is adjacent to Rock, treat the pressure gradient as zero
 (so that there is no flux across this face).
 
+\section{Light}
+
+Light is a parameter of Air blocks. Light is $L_{\text{sky}}$ in any
+block with unobstructed vertical line of sight to the sky; otherwise
+it is $L_{\text{amb}}$. (Maybe we'll implement some radiosity model
+later.)
+
+\section{Plant}
+
+A Plant block has two main components: the ``physical'' plant (which
+follows ``physical laws'') and the controlling state machine. This
+section describes the physical component.
+
+The dynamic parameters of a Plant block are:
+\begin{enumerate}
+\item Water content (just like Earth blocks);
+\item Energy content (another integer)
+\end{enumerate}
+
+The static parameters are:
+\begin{enumerate}
+\item Saturation level (as Earth blocks, but probably higher);
+\item Compressibilities (saturated and unsaturated, like Earth
+  blocks);
+\item \ellipses
+\end{enumerate}
+
+\subsection{Plant actions}
+
+Every state-machine tick, the Plant block can choose any number of the
+following actions:
+
+\begin{enumerate}
+\item For each face, decide whether the water flow valve is open or
+  closed. (That is, there is a choice of permeability.)
+\item For each open face, a 
+\end{enumerate}
+
+\subsection{Plant sensors}
+
+The plant state-machine has available to it the following data:
+\begin{enumerate}
+\item The face that is ``up.'' 
+\end{enumerate}
+
+
+\section{Wacky ideas section}
+
+\begin{itemize}
+\item When Plant blocks grow, they have to specify whether a face is a
+  ``water in'' or ``water out'' face. 
+\end{itemize}
+
+
 \end{document}

@@ -16,7 +16,7 @@ import random
 from math import floor
 
 UNSATURATED_PRESSURE_GRADIENT = 0.5
-SATURATED_PRESSURE_GRADIENT = 0.8
+SATURATED_PRESSURE_GRADIENT = 1.0
 
 class Direction(Enum):
     LEFT = 0
@@ -60,8 +60,8 @@ class Cell(States):
     energy = 0
     # State
     colour = None
-    wsat = 1.0
-    permeability = 1.0
+    wsat = 128.0
+    permeability = (1.0/8.0)
     water_pressure_external = []
     pressure_gradient = []
     flux = []
@@ -87,7 +87,7 @@ class Cell(States):
         water_pressure[Direction.BELOW.value] += self.water * self.permeability
 
         for direction in range(len(Direction)):
-            self.flux[direction] = floor(water_pressure[direction])
+            self.flux[direction] = (water_pressure[direction])
 
     def update_flux(self):
         new_flux = [0] * 6
@@ -141,7 +141,7 @@ def interpolate(col1, col2, s):
         (col2[1] * s) + (col1[1] * (1 - s)),
         (col2[2] * s) + (col1[2] * (1 - s)),
         #(col2[3] * s) + (col1[3] * (1 - s)),
-        0.5 if s > 0 else 0.0
+        0.5 if s > 0.5 else 0.0
     )
 
 class Soil(Cell):
@@ -149,10 +149,10 @@ class Soil(Cell):
 
     def __init__(self):
         super().__init__()
-        self.water = random.randint(1, 10)
+        self.water = 0 #random.randint(1, 10)
 
     def update(self, grid):
-        scale = min(self.water, 100) / 100
+        scale = min(self.water, 1.0) / 1.0
         rock = (0.0, 0.0, 0.0, 0.8)
         water = (0.075, 0.416, 0.936, 0.8)
 
@@ -204,13 +204,14 @@ class Grid():
                         xnorm = (x - (self.width / 2.0) / (self.width / 2.0))
                         ynorm = (y - (self.depth / 2.0) / (self.depth / 2.0))
                         znorm = (z - (self.height / 2.0) / (self.height / 2.0))
-                        height = 4.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
+                        height = 2.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
                         if znorm < height:
-                            column.append(Soil())
+                            column.append(Rock())
                         else:
-                            column.append(Air())
+                            column.append(Soil())
                 row.append(column)
             self.grid.append(row)
+        self.grid[7][7][15].water = 128
 
         for x in range(self.width):
             for y in range(self.depth):
@@ -414,12 +415,13 @@ class Grid():
         self.plot()
         plt.ion()
         plt.show()
+        input("Press Enter to continue...")
 
         while True:
             #print("Start update")
             self.update()
             #print("End update")
-            self.display_slice(4)
+            self.display_slice(7)
             self.plot()
             plt.draw()
             plt.pause(0.1)

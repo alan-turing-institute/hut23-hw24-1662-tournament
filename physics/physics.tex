@@ -138,14 +138,16 @@ If the face is adjacent to Rock, treat the pressure gradient as zero
 
 \subsubsection{Diffusion timescale}
 
-Dimensions are: $M$ for stuff, $L$ for length, $T$ for time; and
-assuming pressure has dimensions $L$. Then $\kappa$ has units
-$L M^{-1}$; $\sigma$ has units $M T^{-1} L^{-2}$ (I think 2?)
+$\delta_t M \sim \sigma \kappa \nabla^2 M$. So ... $\sigma\kappa$ has dimensions $T^2 L^{-1}$.  
 
-So $\kappa \sigma$ has units $(TL}^{-1}$. So a length and/or timescale is
-$(\kappa\sigma)^{-\frac{1}{2}}$.
+We should probably have $\kappa\sigma < 1 $, say $1/8$? With $\kappa~1$.
 
+\subsubsection{Gravity}
 
+What water content is just balanced on top of a just-saturated block?
+The ``gravitational pressure'' is $w$; whereas the upward pressure
+difference is $\kappa(w_\text{sat} - w)$. These balance when $w = \kappa
+w_\text{sat} / (1+\kappa)$. 
 
 
 
@@ -164,8 +166,13 @@ section describes the physical component.
 
 The dynamic parameters of a Plant block are:
 \begin{enumerate}
+\item An identifier of this plant's species;
+\item (Possibly) an opaque identifier of ``this plant;'' 
 \item Water content (just like Earth blocks);
-\item Energy content (another integer)
+\item Energy content (another integer). An energy of $1\,\textrm{e}$ is the energy
+  required to lift unit water by one block;
+\item For each face, a permeability. (Note that there are two
+  permeabiliities for each face, one for each block on either side.)
 \end{enumerate}
 
 The static parameters are:
@@ -173,18 +180,27 @@ The static parameters are:
 \item Saturation level (as Earth blocks, but probably higher);
 \item Compressibilities (saturated and unsaturated, like Earth
   blocks);
-\item \ellipses
+\item $F_{\text{max}}$, the maximum force a plant block can apply
+  across a face to water.
+\item The maximum permeability of a face, $\sigma$.
 \end{enumerate}
 
 \subsection{Plant actions}
 
-Every state-machine tick, the Plant block can choose any number of the
+Every state-machine tick, the Plant block can choose any number
+(including all) of the
 following actions:
 
 \begin{enumerate}
-\item For each face, decide whether the water flow valve is open or
-  closed. (That is, there is a choice of permeability.)
-\item For each open face, a 
+\item For each face (including faces exposed to air), set the
+  permeability from zero up to a maximum $\sigma$.
+\item For each open face apply a ``pumping force'' up to a maximum of
+  $F_{\text{max}}$.
+\item Transmit arbitrary energy to any adjacent plant block. (This
+  action takes place before any other actions.) The energy thus
+  transferred may not leave the block with negative energy. Energy is
+  transferred in order of instructions.
+\item Post a ``signal'' on any face. (Data format to be determined.)
 \end{enumerate}
 
 \subsection{Plant sensors}
@@ -192,14 +208,80 @@ following actions:
 The plant state-machine has available to it the following data:
 \begin{enumerate}
 \item The face that is ``up.'' 
+\item The energy in this block.
+\item The water content in this block.
+\item The outcome permeability of each side.
+\item The nature of each adjacent block (plant, air, earth, other);
+\item The water pressure in adjacent blocks.
+\item The signal posted by the adjacent block.
 \end{enumerate}
+
+\subsection{Plant dynamics}
+
+\subsubsection{Pumping}
+
+\begin{enumerate}
+\item For each block, compute pressure in the usual way. However, the
+  pressure/density relation is different: see
+  figure~\ref{fig:plant-pressure}.
+\item For each face, compute the total force across this face, as the
+  sum of:
+  \begin{itemize}
+  \item the pressure difference;
+  \item the two pumping forces (one from each adjacent block);
+  \item the gravitational term.
+  \end{itemize}
+  Except that, if this block's energy is zero or negative, no pumping
+  can be done (the pumping force is set to zero).
+\item For each face, compute the resultant permeability as being the
+  ``parallel sum'' of the two permeabilities set by the adjacent
+  blocks. (The inverse of the resultant is the sum of the inverses.)
+  For the purpose of this calculation, Air has infinite permeability;
+  Rock has zero permeability.
+\item For each face, compute the resultant force.
+\item From the resultant force and the permeability, compute the net
+  preliminary flux.
+\item Next, adjust the preliminary fluxes (as before) to ensure that the outflow
+  does not make the volume negative.
+\item Then, for each pump, compute the energy consumption as the force
+  \emph{of that pump} multiplied by the flux in the direction of the
+  pump. (If the flux is opposite the pumping direction, no energy is
+  consumed.)
+\item Subtract the total energy consumption from the block's
+  energy. (It is allowed to go below zero, but no pumping can then
+  take place until it is brought above zero.)
+\end{enumerate}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics{fig-plant-pressure.pdf}
+  \caption{Dependence of hydraulic pressure on water content for Plant
+    blocks. The pressure is constant and negative up to the saturated
+    limit (this lets the roots ``suck in'' water), then jumps to being
+    more negative and incompressible. The idea for this jump is to
+    allow water to be ``pulled upwards'' as it evaporates from the
+    higher blocks, at least up to some point when the connection
+    ``breaks.''}
+  \label{fig:plant-pressure}
+\end{figure}
+
+  
+  
+\subsubsection{Evaporation}
+
+\subsubsection{Photosynthesis}
+
+  
+
+
 
 
 \section{Wacky ideas section}
 
 \begin{itemize}
-\item When Plant blocks grow, they have to specify whether a face is a
-  ``water in'' or ``water out'' face. 
+\item It takes energy to change the direction and strength of the face
+  pumps. 
+\item Generators (like pumps, but in reverse).
 \end{itemize}
 
 

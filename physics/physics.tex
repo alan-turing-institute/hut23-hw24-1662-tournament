@@ -80,9 +80,12 @@ enter into the equations of state.
 \begin{enumerate}
 \item Saturation level $w_{\text{sat}}$ (integer): the maximum water
   content per block.
-\item Permeability: the inverse of the number of world ticks over
+\item Permeability, $\sigma$: the inverse of the number of world ticks over
   which one unit of water flows between blocks subject to a pressure
   gradient of~$1$.
+\item Compressibilit, $\kappa$ (in unsaturated regime), $\bar{\kappa}$ (in
+  saturated regime). The marginal increase in pressure for one unit
+  increase in water water content; that is $\Delta p/\Delta w$. 
 \item Gravitational constant is chosen to make the weight of 1 unit of
   water equal to~1.
 \end{enumerate}
@@ -130,6 +133,21 @@ exiting into Air will be lost, but won't in fact happen very often.)
 
 If the face is adjacent to Rock, treat the pressure gradient as zero
 (so that there is no flux across this face).
+
+\subsection{Back of the envelope estimates}
+
+\subsubsection{Diffusion timescale}
+
+Dimensions are: $M$ for stuff, $L$ for length, $T$ for time; and
+assuming pressure has dimensions $L$. Then $\kappa$ has units
+$L M^{-1}$; $\sigma$ has units $M T^{-1} L^{-2}$ (I think 2?)
+
+So $\kappa \sigma$ has units $(TL}^{-1}$. So a length and/or timescale is
+$(\kappa\sigma)^{-\frac{1}{2}}$.
+
+
+
+
 
 \section{Light}
 

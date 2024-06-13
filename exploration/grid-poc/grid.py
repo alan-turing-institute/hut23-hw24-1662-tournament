@@ -7,15 +7,14 @@
 # Example Plants
 
 from time import sleep
-import matplotlib.pyplot as plt
 import numpy as np
 import math
 from enum import Enum
 import copy
 import random
 from math import floor
-from voxels import voxels
-import types
+import voxels as vxm
+from threading import Thread, Lock
 
 UNSATURATED_PRESSURE_GRADIENT = 0.5
 SATURATED_PRESSURE_GRADIENT = 1.0
@@ -183,15 +182,19 @@ class Rock(Cell):
         pass
 
 class Grid():
-    width = 16
-    depth = 16
-    height = 16
+    width = 8
+    depth = 8
+    height = 8
 
     grid = []
     energies = []
     reproduce = []
 
-    ax = None
+    # Threading
+    render_lock = None
+    colours = []
+
+
 
     def populate(self):
         self.grid = []
@@ -206,14 +209,14 @@ class Grid():
                         xnorm = (x - (self.width / 2.0) / (self.width / 2.0))
                         ynorm = (y - (self.depth / 2.0) / (self.depth / 2.0))
                         znorm = (z - (self.height / 2.0) / (self.height / 2.0))
-                        height = 2.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
+                        height = 0.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
                         if znorm < height:
                             column.append(Rock())
                         else:
                             column.append(Soil())
                 row.append(column)
             self.grid.append(row)
-        self.grid[7][7][15].water = 128
+        self.grid[3][3][7].water = 128
 
         for x in range(self.width):
             for y in range(self.depth):
@@ -243,6 +246,15 @@ class Grid():
                     column.append(None)
                 row.append(column)
             self.reproduce.append(row)
+
+        for x in range(self.width):
+            row = []
+            for y in range(self.depth):
+                column = []
+                for z in range(self.height):
+                    column.append((0.0, 0.0, 0.0, 0.0))
+                row.append(column)
+            self.colours.append(row)
 
     def cell(self, x, y, z):
         return self.grid[x % self.width][y % self.depth][z % self.height]
@@ -371,6 +383,7 @@ class Grid():
                     if direction != None:
                         self.grid[x][y][z] = self.neightbour(x, y, z, direction).deepcopy()
 
+    count = 1
 
     def update(self):
         self.preupdate()
@@ -382,7 +395,7 @@ class Grid():
                     cell.update(grid)
 
         self.postupdate()
-    
+
     def display_slice(self, z):
         for y in range(self.depth):
             line = ''
@@ -391,46 +404,55 @@ class Grid():
                 line += "{:3} ".format(character)
             print(line)
             
-    def plot(self):
-        voxelarray = np.empty([self.width, self.depth, self.height], dtype=bool)
-        colors = np.empty(voxelarray.shape, dtype=object)
+    def grid_update(self):
+        while True:
+            self.update()
+            with self.render_lock:
+                for x in range(self.width):
+                    for y in range(self.depth):
+                        for z in range(self.height):
+                            self.colours[x][y][z] = self.grid[x][y][z].colour
+            sleep(0.1)
 
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.grid[x][y][z]
-                    if cell.colour[3] > 0.0:
-                        voxelarray[x, y, z] = True
-                        colors[x, y, z] = "Red"
-                    else:
-                        voxelarray[x, y, z] = False
-                    colors[x, y, z] = cell.colour
+    def start_grid_thread(self):
+        self.render_lock = Lock()
+        t = Thread(target=lambda : self.grid_update(), args=[])
+        t.start()
 
-        self.ax.clear()
-        self.ax.voxels(voxelarray, facecolors=colors, edgecolor='k', internal_faces=True)
+    def update_colours(self):
+        with self.render_lock:
+            count = 0
+            for x in range(self.width):
+                for y in range(self.depth):
+                    for z in range(self.height):
+                        voxel = self.voxels[count]
+                        colour = self.colours[x][y][z]
+                        voxel.prop.color = "#{:02x}{:02x}{:02x}".format(
+                            int(colour[0] * 256),
+                            int(colour[1] * 256),
+                            int(colour[2] * 256)
+                        )
+                        voxel.prop.opacity = colour[3]
+                        count += 1
 
     def main(self):
+        print("Preparing grid world...")
         random.seed(1)
         self.populate()
 
-        self.ax = plt.figure().add_subplot(projection='3d')
+        # Create the scene
+        pl, self.voxels = vxm.draw(self.width, self.depth, self.height)
+        pl.add_callback(lambda : self.update_colours(), interval=1000)
 
-        self.ax.voxels = types.MethodType(voxels, self.ax)
-
-        self.plot()
-        plt.ion()
-        plt.show()
+        print("...Prepared")
+        self.start_grid_thread()
+        print("...Prepared2")
         input("Press Enter to continue...")
 
         while True:
-            #print("Start update")
-            self.update()
-            #print("End update")
-            #self.display_slice(7)
-            self.plot()
-            plt.draw()
-            plt.pause(0.01)
-            #sleep(0.25)
+            pl.render()
+            pl.app.processEvents()
+            pl.show()
 
 if __name__ == "__main__":
     grid = Grid()

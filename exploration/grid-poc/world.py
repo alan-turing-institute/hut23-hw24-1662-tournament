@@ -4,30 +4,30 @@
 # SPDX-License-Identifier: BSD-2-Clause
 # Copyright © 2024 The Alan Turing Institute
 
-# Example Plants
+# World
 
 from time import sleep
 import numpy as np
 import math
-from enum import Enum
 import copy
 import random
 from math import floor
 import voxels as vxm
 from threading import Thread, Lock
 from typing import Tuple
+from cells import (
+    Direction,
+    State,
+    States,
+    Cell,
+    Air,
+    Soil,
+    Rock,
+)
 
-
-UNSATURATED_PRESSURE_GRADIENT = 0.5
-SATURATED_PRESSURE_GRADIENT = 1.0
-
-class Direction(Enum):
-    LEFT = 0
-    RIGHT = 1
-    BELOW = 2
-    ABOVE = 3
-    FRONT = 4
-    BEHIND = 5
+from plants import (
+    Plant,
+)
 
 def opposite(direction):
     return [
@@ -39,165 +39,23 @@ def opposite(direction):
         Direction.FRONT
     ][direction]
 
-class State():
-    state = {}
-
-class States():
-    state = None
-    incoming = None
-    outgoing = None
-    reproduce = None
-
-    def __init__(self):
-        self.clear()
-
-    def clear(self):
-        self.state = State()
-        self.incoming = [State() for _ in range(len(Direction))]
-        self.outgoing = [State() for _ in range(len(Direction))]
-        self.reproduce = [False for _ in range(len(Direction))]
-
-class Cell(States):
-    # Resources
-    water = 0
-    energy = 0
-    # State
-    colour = None
-    wsat = 128.0
-    permeability = (1.0/8.0)
-    water_pressure_external = []
-    pressure_gradient = []
-    flux = []
-
-    def __init__(self):
-        super().__init__()
-        self.water_pressure_external = [0.0] * len(Direction)
-        self.pressure_gradient = [0.0] * len(Direction)
-        self.flux = [0] * len(Direction)
-
-    def update_water(self):
-        # Calculate the internal water pressure
-        if self.water < self.wsat:
-            pressure = UNSATURATED_PRESSURE_GRADIENT * self.water
-        else:
-            pressure = SATURATED_PRESSURE_GRADIENT * self.water
-
-        # Calculate the pressure gradient on each face
-        water_pressure = [
-            (pressure - self.water_pressure_external[direction]) * self.permeability
-            for direction in range(len(Direction))
-        ]
-        water_pressure[Direction.BELOW.value] += self.water * self.permeability
-
-        for direction in range(len(Direction)):
-            self.flux[direction] = (water_pressure[direction])
-
-    def update_flux(self):
-        new_flux = [0] * 6
-        total = 0
-        water_orig = self.water
-        while total < water_orig and max(self.flux) > 0:
-            pos = self.flux.index(max(self.flux))
-            if self.water > self.flux[pos]:
-                new_flux[pos] = self.flux[pos]
-                total += self.flux[pos]
-                self.water -= self.flux[pos]
-                self.flux[pos] = 0
-            else:
-                new_flux[pos] = self.water
-                total += self.water
-                self.flux[pos] -= self.water
-                self.water = 0
-        self.flux = new_flux
-
-    def apply_flux(self, incoming):
-        self.water += incoming
-
-    def update(self, grid):
-        pass
-
-class Air(Cell):
-    colour = (0.0, 0.0, 0.0, 0.0)
-
-    def __init__(self):
-        super().__init__()
-        self.water_pressure_external = [10000.0] * len(Direction)
-
-    def update_water(self):
-        pass
-
-    def update_flux(self):
-        pass
-
-    def update(self, grid):
-        pass
-
-    def apply_flux(self, incoming):
-        if incoming > 0:
-            print("ERROR: {}".format(incoming))
-            exit()
-        pass
-
-def interpolate(col1, col2, s):
-    return (
-        (col2[0] * s) + (col1[0] * (1 - s)),
-        (col2[1] * s) + (col1[1] * (1 - s)),
-        (col2[2] * s) + (col1[2] * (1 - s)),
-        #(col2[3] * s) + (col1[3] * (1 - s)),
-        s if s > 0.2 else 0.0
-    )
-
-class Soil(Cell):
-    colour = (0.0, 0.0, 0.0, 0.0)
-
-    def __init__(self):
-        super().__init__()
-        self.water = 0 #random.randint(1, 10)
-
-    def update(self, grid):
-        scale = min(self.water, 1.0) / 1.0
-        rock = (0.0, 0.0, 0.0, 0.8)
-        water = (0.075, 0.416, 0.936, 0.8)
-
-        self.colour = interpolate(water, water, scale)
-
-class Rock(Cell):
-    colour = (0.6, 0.6, 0.6, 1.0)
-
-    def __init__(self):
-        super().__init__()
-        self.water_pressure_external = [10000.0] * len(Direction)
-
-    def update_water(self):
-        pass
-
-    def update_flux(self):
-        pass
-
-    def update(self, grid):
-        pass
-
-    def apply_flux(self, incoming):
-        if incoming > 0:
-            print("ERROR: {}".format(incoming))
-            exit()
-        pass
-
 class Grid():
-    width = 16
-    depth = 16
-    height = 16
+    width = 8
+    depth = 8
+    height = 8
 
     grid = []
     energies = []
     reproduce = []
 
-    ax = None
+    # Threading
+    render_lock = None
+    colours = []
 
     def populate(self):
         self.grid = []
-        def gaussian_surface_3d(grid_size: int = self.width, A: float = self.height, x0: float = 12, y0: float = 12, 
-                        sigma_x: float = 5, sigma_y: float = 5) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        def gaussian_surface_3d(grid_size: int = self.width, A: float = self.height, x0: float = 0, y0: float = 0, 
+                        sigma_x: float = 2.5, sigma_y: float = 2.5) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
             """
             Generates a 3D Gaussian surface.
 
@@ -219,8 +77,8 @@ class Grid():
             z = A * np.exp(-((x - x0) ** 2 / (2 * sigma_x ** 2) + (y - y0) ** 2 / (2 * sigma_y ** 2)))
         
             return (x, y, z)
-        gauss_x, gauss_y, gauss_z = gaussian_surface_3d(grid_size=self.width, A=(3*self.height)/4, x0=self.width, y0=self.width)
-
+        gauss_x, gauss_y, gauss_z = gaussian_surface_3d(grid_size=self.width, A=(3*self.height)/4, x0=0, y0=0)
+        fertile = []
         for x in range(self.width):
             row = []
             for y in range(self.depth):
@@ -236,11 +94,41 @@ class Grid():
                         # height = 0.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
                         if znorm < height:
                             column.append(Rock())
-                        else:
+                        elif znorm < height + 3:
                             column.append(Soil())
+                            fertile.append((x,y,z))
+                        else:
+                            column.append(Air())
                 row.append(column)
             self.grid.append(row)
-        self.grid[3][3][7].water = 128
+
+        def find_highest_point(fertile):
+            (highest_x,highest_y,highest_z) = (0,0,0)
+            for cell in fertile:
+                (cell_x,cell_y,cell_z) = cell
+                if cell_z > highest_z:
+                    (highest_x,highest_y,highest_z)=cell
+            return (highest_x,highest_y,highest_z)
+        
+        # cloud_seed = random.randint(0,len(fertile))
+        # (cloud_x, cloud_y, cloud_z) = fertile[cloud_seed]
+    
+        (highest_x,highest_y,highest_z) = find_highest_point(fertile)
+        self.grid[highest_x][highest_y][highest_z].water = 128
+        
+        def find_topsoil(fertile, x, y):
+            (highest_x,highest_y,highest_z) = (0,0,0)
+            for cell in fertile:
+                (cell_x,cell_y,cell_z) = cell
+                if (cell_x == x) and (cell_y == y):
+                    if cell_z > highest_z:
+                        (highest_x,highest_y,highest_z)=cell
+            return (highest_x,highest_y,highest_z)
+
+        plant_seed = random.randint(0,len(fertile))
+        (seed_x, seed_y, seed_z) = fertile[plant_seed]
+        (topsoil_x,topsoil_y,topsoil_z) = find_topsoil(fertile, seed_x, seed_y)
+        self.grid[topsoil_x][topsoil_y][topsoil_z] = Plant()
 
         for x in range(self.width):
             for y in range(self.depth):
@@ -251,7 +139,6 @@ class Grid():
                             reverse = opposite(direction).value
                             neighbour = self.neighbour(x, y, z, direction)
                             neighbour.water_pressure_external[reverse] = 10000.0
-
 
         for x in range(self.width):
             row = []
@@ -336,9 +223,7 @@ class Grid():
                     cell.incoming[Direction.BEHIND.value] = self.cell(x, y + 1, z).outgoing[Direction.FRONT.value]
                     cell.incoming[Direction.BELOW.value] = self.cell(x, y, z - 1).outgoing[Direction.ABOVE.value]
                     cell.incoming[Direction.ABOVE.value] = self.cell(x, y, z + 1).outgoing[Direction.BELOW.value]
-                    
                     cell.update_water()
-
 
     def postupdate(self):
         # Transfer the pressures
@@ -407,8 +292,6 @@ class Grid():
                     if direction != None:
                         self.grid[x][y][z] = self.neightbour(x, y, z, direction).deepcopy()
 
-    count = 1
-
     def update(self):
         self.preupdate()
 
@@ -428,28 +311,8 @@ class Grid():
                 line += "{:3} ".format(character)
             print(line)
             
-    def plot(self):
-        voxelarray = np.empty([self.width, self.depth, self.height], dtype=int)
-
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    voxelarray[x, y, z] = 1
-
-        model = vxm.Model(voxelarray)
-
-        model.hashblocks[1] = ["#000000", 0.0]
-        model.hashblocks[0] = ["#999999", 0.5]
-
-        pl, self.voxels = model.draw(coloring='custom', len_voxel=1.0, background_color='#ffffff', wireframe=True, show=False)
-        pl.view_isometric()
-        #pl.isometric_view_interactive()
-        return pl, model
-    
-    render_lock = None
-    colours = []
-
     def grid_update(self):
+        input("Press Enter to continue...")
         while True:
             self.update()
             with self.render_lock:
@@ -457,7 +320,7 @@ class Grid():
                     for y in range(self.depth):
                         for z in range(self.height):
                             self.colours[x][y][z] = self.grid[x][y][z].colour
-            sleep(1)
+            sleep(0.1)
 
     def start_grid_thread(self):
         self.render_lock = Lock()
@@ -472,9 +335,12 @@ class Grid():
                     for z in range(self.height):
                         voxel = self.voxels[count]
                         colour = self.colours[x][y][z]
-                        fullcolour = "#{:02x}{:02x}{:02x}".format(int(colour[0] * 256), int(colour[1] * 256), int(colour[2] * 256))
+                        voxel.prop.color = "#{:02x}{:02x}{:02x}".format(
+                            int(colour[0] * 255),
+                            int(colour[1] * 255),
+                            int(colour[2] * 255)
+                        )
                         voxel.prop.opacity = colour[3]
-                        voxel.prop.color = fullcolour
                         count += 1
 
     def main(self):
@@ -482,37 +348,28 @@ class Grid():
         random.seed(1)
         self.populate()
 
-        pl, model = self.plot()
-        #plt.ion()
-        #plt.show()
-        #input("Press Enter to continue...")
+        # Create the scene
+        pl, self.voxels = vxm.draw(self.width, self.depth, self.height)
         pl.add_callback(lambda : self.update_colours(), interval=1000)
+        print("...Prepared")
+
+        self.start_grid_thread()
 
         print("...Prepared")
         self.start_grid_thread()
         print("...Prepared2")
         while True:
-            # update velocity
-            #self.update()
-
             pl.render()
             pl.app.processEvents()
             pl.show()
 
-#        while True:
-#            #print("Start update")
-#            self.update()
-#            #print("End update")
-#            #self.display_slice(7)
-#            self.plot()
-#            #sleep(0.25)   
-
 if __name__ == "__main__":
     grid = Grid()
     grid.main()
-    
-    
-    
-    
+
+
+
+
+
 
 

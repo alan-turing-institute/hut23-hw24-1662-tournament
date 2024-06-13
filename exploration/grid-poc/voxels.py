@@ -1,3 +1,9 @@
+#!/bin/python3
+# vim: et:ts=4:sts=4:sw=4
+
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright © 2024 The Alan Turing Institute
+
 from matplotlib import cm
 import numpy as np
 import pyvista
@@ -29,7 +35,7 @@ def draw(width, depth, height):
         x_len, y_len, z_len = tuple(3*[1.0])
 
         # Voxel Geometry
-        voxel = pyvista.Cube(center=centres[pos],x_length=x_len, y_length=y_len, z_length=z_len)
+        voxel = pyvista.Cube(center=centres[pos], x_length=x_len, y_length=y_len, z_length=z_len)
         smooth= None
 
         # Mesh creation and coloring

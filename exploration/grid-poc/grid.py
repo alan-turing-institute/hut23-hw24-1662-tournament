@@ -15,6 +15,8 @@ import random
 from math import floor
 import voxels as vxm
 from threading import Thread, Lock
+from typing import Tuple
+
 
 UNSATURATED_PRESSURE_GRADIENT = 0.5
 SATURATED_PRESSURE_GRADIENT = 1.0
@@ -182,9 +184,9 @@ class Rock(Cell):
         pass
 
 class Grid():
-    width = 8
-    depth = 8
-    height = 8
+    width = 16
+    depth = 16
+    height = 16
 
     grid = []
     energies = []
@@ -194,6 +196,31 @@ class Grid():
 
     def populate(self):
         self.grid = []
+        def gaussian_surface_3d(grid_size: int = self.width, A: float = self.height, x0: float = 12, y0: float = 12, 
+                        sigma_x: float = 5, sigma_y: float = 5) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+            """
+            Generates a 3D Gaussian surface.
+
+            Args:
+                grid_size (int): The size of the grid (default is 24).
+                A (float): Amplitude of the Gaussian (default is 1).
+                x0 (float): X-coordinate of the Gaussian center (default is 12).
+                y0 (float): Y-coordinate of the Gaussian center (default is 12).
+                sigma_x (float): Standard deviation along the X-axis (default is 5).
+                sigma_y (float): Standard deviation along the Y-axis (default is 5).
+
+            Returns:
+                Tuple[np.ndarray, np.ndarray, np.ndarray]: X, Y, and Z coordinates of the Gaussian surface.
+            """
+            x = np.linspace(0, grid_size - 1, grid_size)
+            y = np.linspace(0, grid_size - 1, grid_size)
+            x, y = np.meshgrid(x, y)
+            
+            z = A * np.exp(-((x - x0) ** 2 / (2 * sigma_x ** 2) + (y - y0) ** 2 / (2 * sigma_y ** 2)))
+        
+            return (x, y, z)
+        gauss_x, gauss_y, gauss_z = gaussian_surface_3d(grid_size=self.width, A=(3*self.height)/4, x0=self.width, y0=self.width)
+
         for x in range(self.width):
             row = []
             for y in range(self.depth):
@@ -202,10 +229,11 @@ class Grid():
                     if z == 0:
                         column.append(Rock())
                     else:
-                        xnorm = (x - (self.width / 2.0) / (self.width / 2.0))
-                        ynorm = (y - (self.depth / 2.0) / (self.depth / 2.0))
+                        # xnorm = (x - (self.width / 2.0) / (self.width / 2.0))
+                        # ynorm = (y - (self.depth / 2.0) / (self.depth / 2.0))
                         znorm = (z - (self.height / 2.0) / (self.height / 2.0))
-                        height = 0.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
+                        height = gauss_z[x][y]
+                        # height = 0.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
                         if znorm < height:
                             column.append(Rock())
                         else:

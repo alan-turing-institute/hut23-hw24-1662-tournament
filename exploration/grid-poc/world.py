@@ -23,6 +23,7 @@ from cells import (
     Air,
     Soil,
     Rock,
+    CellType,
 )
 
 from plants import (
@@ -40,8 +41,8 @@ def opposite(direction):
     ][direction]
 
 class Grid():
-    width = 8
-    depth = 8
+    width = 16
+    depth = 16
     height = 8
 
     grid = []
@@ -134,7 +135,7 @@ class Grid():
             for y in range(self.depth):
                 for z in range(self.height):
                     cell = self.grid[x][y][z]
-                    if type(cell) == Rock:
+                    if cell.cell_type == CellType.ROCK:
                         for direction in range(len(Direction)):
                             reverse = opposite(direction).value
                             neighbour = self.neighbour(x, y, z, direction)
@@ -201,9 +202,11 @@ class Grid():
         for direction in range(len(Direction)):
             reverse = opposite(direction).value
             neighbour = self.neighbour(x, y, z, direction)
+            #print(neighbour.energy, energy_max)
             if neighbour.reproduce[reverse] and neighbour.energy > energy_max:
                 energy_max = neighbour.energy
                 best = direction
+            neighbour.reproduce[reverse] = None
 
         if best:
             self.reproduce[x][y][z] = best
@@ -223,7 +226,14 @@ class Grid():
                     cell.incoming[Direction.BEHIND.value] = self.cell(x, y + 1, z).outgoing[Direction.FRONT.value]
                     cell.incoming[Direction.BELOW.value] = self.cell(x, y, z - 1).outgoing[Direction.ABOVE.value]
                     cell.incoming[Direction.ABOVE.value] = self.cell(x, y, z + 1).outgoing[Direction.BELOW.value]
+                    cell.neighbour_type[Direction.LEFT.value] = self.cell(x - 1, y, z).cell_type
+                    cell.neighbour_type[Direction.RIGHT.value] = self.cell(x + 1, y, z).cell_type
+                    cell.neighbour_type[Direction.FRONT.value] = self.cell(x, y - 1, z).cell_type
+                    cell.neighbour_type[Direction.BEHIND.value] = self.cell(x, y + 1, z).cell_type
+                    cell.neighbour_type[Direction.BELOW.value] = self.cell(x, y, z - 1).cell_type
+                    cell.neighbour_type[Direction.ABOVE.value] = self.cell(x, y, z + 1).cell_type
                     cell.update_water()
+                    cell.update_sunlight()
 
     def postupdate(self):
         # Transfer the pressures
@@ -231,11 +241,11 @@ class Grid():
             for y in range(self.depth):
                 for z in range(self.height):
                     cell = self.cell(x, y, z)
-                    if type(cell) == Soil:
+                    if cell.cell_type == CellType.SOIL or cell.cell_type == CellType.PLANT:
                         for direction in range(len(Direction)):
                             reverse = opposite(direction).value
                             neighbour = self.neighbour(x, y, z, direction)
-                            if type(neighbour) == Soil:
+                            if neighbour.cell_type == CellType.SOIL or neighbour.cell_type == CellType.PLANT:
                                 cell.water_pressure_external[direction] = neighbour.flux[reverse]
                             else:
                                 cell.water_pressure_external[direction] = 9999.0
@@ -247,19 +257,22 @@ class Grid():
                     cell = self.cell(x, y, z)
                     cell.update_flux()
 
-        # Move the water
+        # Move the water and energy
         for x in range(self.width):
             for y in range(self.depth):
                 for z in range(self.height):
                     cell = self.cell(x, y, z)
-                    incoming = 0
+                    water_incoming = 0
+                    energy_incoming = 0
                     for direction in range(len(Direction)):
                         reverse = opposite(direction).value
                         neighbour = self.neighbour(x, y, z, direction)
-                        incoming += neighbour.flux[reverse]
+                        water_incoming += neighbour.flux[reverse]
+                        energy_incoming += neighbour.energy_outgoing[reverse]
+                        neighbour.energy_outgoing[reverse] = 0
                         #cell.water -= cell.flux[direction]
                         #neighbour.flux[reverse] = 0
-                    cell.apply_flux(incoming)
+                    cell.apply_flux(water_incoming, energy_incoming)
 
         #print(self.cell(3, 0, 1).flux)
 
@@ -268,7 +281,7 @@ class Grid():
                 for z in range(self.height):
                     cell = self.cell(x, y, z)
                     cell.flux = [0] * len(Direction)
-                    cell.pressure_gradient = [0] * len(Direction)
+                    #cell.pressure_gradient = [0] * len(Direction)
 
         water = 0
         for x in range(self.width):
@@ -276,7 +289,7 @@ class Grid():
                 for z in range(self.height):
                     cell = self.cell(x, y, z)
                     water += cell.water
-        print("Water: {}".format(water))
+        #print("Water: {}".format(water))
 
         # Allow cells to try to reproduce
         for x in range(self.width):
@@ -290,7 +303,9 @@ class Grid():
                 for z in range(self.height):
                     direction = self.reproduce[x][y][z]
                     if direction != None:
-                        self.grid[x][y][z] = self.neightbour(x, y, z, direction).deepcopy()
+                        self.grid[x][y][z] = copy.deepcopy(self.neighbour(x, y, z, direction))
+                        self.grid[x][y][z]
+                    self.reproduce[x][y][z] = False
 
     def update(self):
         self.preupdate()

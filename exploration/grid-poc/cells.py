@@ -17,6 +17,13 @@ class Direction(Enum):
     FRONT = 4
     BEHIND = 5
 
+class CellType(Enum):
+    NONE = 0
+    AIR = 0
+    ROCK = 1
+    SOIL = 2
+    PLANT = 3
+
 class State():
     state = {}
 
@@ -36,22 +43,50 @@ class States():
         self.reproduce = [False for _ in range(len(Direction))]
 
 class Cell(States):
+    cell_type = CellType.NONE
     # Resources
     water = 0
     energy = 0
     # State
     colour = None
     wsat = 128.0
-    permeability = (1.0/8.0)
+    permeability = (1.0/32.0)
     water_pressure_external = []
     pressure_gradient = []
     flux = []
+    energy_outgoing = []
+    neighbour_type = []
 
     def __init__(self):
         super().__init__()
         self.water_pressure_external = [0.0] * len(Direction)
         self.pressure_gradient = [0.0] * len(Direction)
         self.flux = [0] * len(Direction)
+        self.energy_outgoing = [0] * len(Direction)
+        self.neighbour_type = [CellType.AIR] * len(Direction)
+
+    def get_neighbour(self, direction):
+        return self.neighbour_type[direction]
+
+    def action_send_energy(self, energy, direction):
+        if energy > self.energy:
+            energy = self.energy
+        self.energy_outgoing[direction.value] += energy
+        self.energy -= energy
+
+    def action_reproduce(self, direction):
+        self.reproduce[direction.value] = True
+
+    def action_pump(self, direction, force):
+        sign = 1 if force >= 0 else -1
+        energy_required = abs(self.energy * 1.0)
+        if energy_required > self.energy:
+            force = sign * self.energy
+        self.pressure_gradient[direction] += force
+        self.energy -= energy_required
+
+    def update_sunlight(self):
+        pass
 
     def update_water(self):
         # Calculate the internal water pressure
@@ -88,13 +123,15 @@ class Cell(States):
                 self.water = 0
         self.flux = new_flux
 
-    def apply_flux(self, incoming):
-        self.water += incoming
+    def apply_flux(self, water_incoming, energy_incoming):
+        self.water += water_incoming
+        self.energy += energy_incoming
 
     def update(self, grid):
         pass
 
 class Air(Cell):
+    cell_type = CellType.AIR
     colour = (0.0, 0.0, 0.0, 0.0)
 
     def __init__(self):
@@ -110,11 +147,11 @@ class Air(Cell):
     def update(self, grid):
         pass
 
-    def apply_flux(self, incoming):
-        if incoming > 0:
-            print("ERROR: {}".format(incoming))
-            # exit()
-        pass
+    def apply_flux(self, water_incoming, energy_incoming):
+        if water_incoming > 0:
+            print("ERROR: {}".format(water_incoming))
+            exit()
+        self.energy += energy_incoming
 
 def interpolate(col1, col2, s):
     return (
@@ -126,6 +163,7 @@ def interpolate(col1, col2, s):
     )
 
 class Soil(Cell):
+    cell_type = CellType.SOIL
     colour = (0.8, 0.3, 0.0, 0.0)
 
     def __init__(self):
@@ -140,7 +178,9 @@ class Soil(Cell):
         self.colour = interpolate(rock, water, scale)
 
 class Rock(Cell):
+    cell_type = CellType.ROCK
     colour = (0.6, 0.6, 0.6, 1.0)
+    energy = 1000
 
     def __init__(self):
         super().__init__()
@@ -155,11 +195,11 @@ class Rock(Cell):
     def update(self, grid):
         pass
 
-    def apply_flux(self, incoming):
-        if incoming > 0:
-            print("ERROR: {}".format(incoming))
-            # exit()
-        pass
+    def apply_flux(self, water_incoming, energy_incoming):
+        if water_incoming > 0:
+            print("ERROR: {}".format(water_incoming))
+            exit()
+        self.energy += energy_incoming
 
 
 

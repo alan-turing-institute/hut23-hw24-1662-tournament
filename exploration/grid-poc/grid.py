@@ -14,6 +14,8 @@ from enum import Enum
 import copy
 import random
 from math import floor
+from voxels import voxels
+import types
 
 UNSATURATED_PRESSURE_GRADIENT = 0.5
 SATURATED_PRESSURE_GRADIENT = 1.0
@@ -141,7 +143,7 @@ def interpolate(col1, col2, s):
         (col2[1] * s) + (col1[1] * (1 - s)),
         (col2[2] * s) + (col1[2] * (1 - s)),
         #(col2[3] * s) + (col1[3] * (1 - s)),
-        0.5 if s > 0.5 else 0.0
+        s if s > 0.2 else 0.0
     )
 
 class Soil(Cell):
@@ -159,7 +161,7 @@ class Soil(Cell):
         self.colour = interpolate(water, water, scale)
 
 class Rock(Cell):
-    colour = (0.6, 0.6, 0.6, 0.5)
+    colour = (0.6, 0.6, 0.6, 1.0)
 
     def __init__(self):
         super().__init__()
@@ -405,13 +407,16 @@ class Grid():
                     colors[x, y, z] = cell.colour
 
         self.ax.clear()
-        self.ax.voxels(voxelarray, facecolors=colors, edgecolor='k')
+        self.ax.voxels(voxelarray, facecolors=colors, edgecolor='k', internal_faces=True)
 
     def main(self):
         random.seed(1)
         self.populate()
 
         self.ax = plt.figure().add_subplot(projection='3d')
+
+        self.ax.voxels = types.MethodType(voxels, self.ax)
+
         self.plot()
         plt.ion()
         plt.show()
@@ -421,10 +426,10 @@ class Grid():
             #print("Start update")
             self.update()
             #print("End update")
-            self.display_slice(7)
+            #self.display_slice(7)
             self.plot()
             plt.draw()
-            plt.pause(0.1)
+            plt.pause(0.01)
             #sleep(0.25)
 
 if __name__ == "__main__":

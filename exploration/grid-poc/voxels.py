@@ -1,139 +1,126 @@
-#!/bin/python3
-# vim: et:ts=4:sts=4:sw=4
-
-# Add internal_faces flag to voxel rendering
-
-from mpl_toolkits.mplot3d import Axes3D, art3d  # NOQA
-from collections import defaultdict
+from matplotlib import cm
 import numpy as np
+import pyvista
+import pyvistaqt as pvqt
 
-def voxels(self, *args, **kwargs):
+def matrix_toXY(array,mult):
+    """
+    Converts a 2D numpy array into an XYv coordinate matrix where v is the corresponding element in every x-y coordinate.
 
-    if len(args) >= 3:
-        # underscores indicate position only
-        def voxels(__x, __y, __z, filled, **kwargs):
-            return (__x, __y, __z), filled, kwargs
-    else:
-        def voxels(filled, **kwargs):
-            return None, filled, kwargs
+    Parameters
+    ----------
+    array : np.array(int,int)
+        The 2D numpy array to be converted to an XYv coordinate matrix.
+    mult : int or float
+        The multiplication factor to be applied to the elements in the matrix.
+    """
 
-    xyz, filled, kwargs = voxels(*args, **kwargs)
+    Z  = np.max(array)
+    return np.array([ [*i,mult*array[tuple(i)]] for i in np.argwhere(array)])
 
-    # check dimensions
-    if filled.ndim != 3:
-        raise ValueError("Argument filled must be 3-dimensional")
-    size = np.array(filled.shape, dtype=np.intp)
+class Model:
 
-    # check xyz coordinates, which are one larger than the filled shape
-    coord_shape = tuple(size + 1)
-    if xyz is None:
-        x, y, z = np.indices(coord_shape)
-    else:
-        x, y, z = (np.broadcast_to(c, coord_shape) for c in xyz)
+    def __init__(self, array=[],file=''):
+        '''Model structure. Calls `3-D` array to process into 3-D model.
 
-    def _broadcast_color_arg(color, name):
-        if np.ndim(color) in (0, 1):
-            # single color, like "red" or [1, 0, 0]
-            return np.broadcast_to(color, filled.shape + np.shape(color))
-        elif np.ndim(color) in (3, 4):
-            # 3D array of strings, or 4D array with last axis rgb
-            if np.shape(color)[:3] != filled.shape:
-                raise ValueError(
-                    "When multidimensional, {} must match the shape of "
-                    "filled".format(name))
-            return color
-        else:
-            raise ValueError("Invalid {} argument".format(name))
+        Parameters
+        ----------
+        array : np.array(int)
+            array of the third-order populated with discrete, non-zero integers which may represent a voxel block type
+        file : str
+            file name and/or path for image file
+        hashblocks : dict[int]{str, float }
+            a dictionary for which the keys are the integer values on the discrete arrays (above) an the values are the color (str) for the specific key and the alpha for the voxel object (float)
+        colormap : < matplotlib.cm object >
+            colormap to use for voxel coloring if coloring kwarg in Model.draw method is not voxels. Default: cm.cool
+        alphacm : float
+            alpha transparency of voxels if colormap option is chosen. default: opaque colormap (alpha=1)
+        
+        -- FOR FILE PROCESSING --
 
-    # intercept the facecolors, handling defaults and broacasting
-    facecolors = kwargs.pop('facecolors', None)
-    if facecolors is None:
-        facecolors = self._get_patches_for_fill.get_next_color()
-    facecolors = _broadcast_color_arg(facecolors, 'facecolors')
+        file : str
+            file name a/or path for goxel txt file
 
-    # broadcast but no default on edgecolors
-    edgecolors = kwargs.pop('edgecolors', None)
-    edgecolors = _broadcast_color_arg(edgecolors, 'edgecolors')
+        -- FOR XYZ COORDINATE ARRAY PROCESSING -- 
 
-    # include possibly occluded internal faces or not
-    internal_faces = kwargs.pop('internal_faces', False)
+        XYZ : np.array(float )
+            an array containing the x,y,z coordinates of shape `number_voxel-locations` x 3 [for each x y z]
+        RGB : list[str] 
+            a list for the colors of every voxels in xyz array (length: `number_voxel-locations`)
+        sparsity : float
+            a factor to separate the relative distance between each voxel (default:10.0 [> 50.0 may have memory limitations])
+        '''
+        self.array = array   # array of third-order (3-D)
 
-    # always scale to the full array, even if the data is only in the center
-    self.auto_scale_xyz(x, y, z)
+        self.hashblocks = {}        # start with empty voxel-color dictionary
+        self.colormap = cm.cool     # default: cool colormap
+        self.alphacm = 1            # default: opaque colormap (alpha=1)
 
-    # points lying on corners of a square
-    square = np.array([
-        [0, 0, 0],
-        [0, 1, 0],
-        [1, 1, 0],
-        [1, 0, 0]
-    ], dtype=np.intp)
+        # self.file = 'placeholder.txt'
+        self.objfile = 'scene.obj'
+        self.XYZ = []
+        self.RGB = []
+        self.sparsity = 10.0
 
-    voxel_faces = defaultdict(list)
+    def draw(self, coloring='none', geometry = 'voxels', scalars='', background_color='#cccccc', wireframe=False, wireframe_color='k', window_size=[1024, 768],len_voxel=1,show=True):
+        '''Draws voxel model after building it with the provided `array` with PyVista library 
 
-    def permutation_matrices(n):
-        """ Generator of cyclic permutation matices """
-        mat = np.eye(n, dtype=np.intp)
-        for i in range(n):
-            yield mat
-            mat = np.roll(mat, 1, axis=0)
+        Parameters
+        ----------
+        coloring: string  
+            voxel coloring scheme
+                * 'custom'                      --> colors voxel model based on the provided keys to its array integers, defined in the `hashblocks` variable from the `Model` class
+                * 'custom: #8599A6'             -->  color all voxel types with the #8599A6 hex color (bluish dark gray) and an alpha transparency of 1.0 (default)
+                * 'custom: red, alpha: 0.24'    --> color all voxel types red and with an alpha transparency of 0.24
+                * 'cmap : {colormap name}' :        colors voxel model based on a colormap; assigns colors from the chosen colormap to the defined array integers
+                * 'cmap : viridis'              --> colormap voxel assignment with the viridis colormap
+                * 'cmap : hot', alpha: 0.56     --> voxel assignment with the hot colormap with an alpha transparency of 0.56
+                * 'none'   --> no coloring 
+                * 'cool'      cool colormap
+                * 'fire'      fire colormap
+                * and so on...
+        geometry: string  
+            voxel geometry. Choose voxels to have a box geometry with geometry='voxels' or spherical one with geometry='particles'
+        scalars : list
+            list of scalars for cmap coloring scheme
+        background_color : string / hex
+            background color of pyvista plot
+        wireframe: bool
+            Represent mesh as wireframe instead of solid polyhedron if True (default: False). 
+        wireframe_color: string / hex 
+            edges or wireframe colors
+        window_size : (float,float)
+            defines plot window dimensions. Defaults to [1024, 768], unless set differently in the relevant theme’s window_size property [pyvista.Plotter]
+        len_voxel : float [for geometry='voxels' or 'particles'] / (float,float,float) [for geometry='voxels']
+            The characteristic side length (or lengths) of the voxel. For 'voxels' geometry, the x,y,z side lengths may be set by defining them in a tuple i.e. len_voxel=(x_len,y_len,z_len); if the len_voxel is set to a singular value, it assumes all box side lengths are the same. For 'particles' geometry, len_voxel=radius (default=1) 
+        show : bool
+            Display Pyvista 3-D render of drawn 3-D model if True (default: True)
+        '''
 
-    for permute in permutation_matrices(3):
-        pc, qc, rc = permute.T.dot(size)
-        pinds = np.arange(pc)
-        qinds = np.arange(qc)
-        rinds = np.arange(rc)
+        xx, yy, zz, voxid = matrix_toXY(self.array, 1).T
 
-        square_rot = square.dot(permute.T)
+        centers = np.vstack((xx.ravel(), yy.ravel(), zz.ravel())).T
 
-        for p in pinds:
-            for q in qinds:
-                p0 = permute.dot([p, q, 0])
-                i0 = tuple(p0)
-                if filled[i0]:
-                    voxel_faces[i0].append(p0 + square_rot)
+        pl = pvqt.BackgroundPlotter()
 
-                # draw middle faces
-                for r1, r2 in zip(rinds[:-1], rinds[1:]):
-                    p1 = permute.dot([p, q, r1])
-                    p2 = permute.dot([p, q, r2])
-                    i1 = tuple(p1)
-                    i2 = tuple(p2)
-                    if filled[i1] and (internal_faces or not filled[i2]):
-                        voxel_faces[i1].append(p2 + square_rot)
-                    elif (internal_faces or not filled[i1]) and filled[i2]:
-                        voxel_faces[i2].append(p2 + square_rot)
+        if background_color != "":
+            pl.background_color = background_color
 
-                # draw upper faces
-                pk = permute.dot([p, q, rc-1])
-                pk2 = permute.dot([p, q, rc])
-                ik = tuple(pk)
-                if filled[ik]:
-                    voxel_faces[ik].append(pk2 + square_rot)
+        voxels = []
+        for i in range(len(centers)):
 
-    # iterate over the faces, and generate a Poly3DCollection for each voxel
-    polygons = {}
-    for coord, faces_inds in voxel_faces.items():
-        # convert indices into 3D positions
-        if xyz is None:
-            faces = faces_inds
-        else:
-            faces = []
-            for face_inds in faces_inds:
-                ind = face_inds[:, 0], face_inds[:, 1], face_inds[:, 2]
-                face = np.empty(face_inds.shape)
-                face[:, 0] = x[ind]
-                face[:, 1] = y[ind]
-                face[:, 2] = z[ind]
-                faces.append(face)
+            x_len,y_len,z_len = tuple(3*[len_voxel]) if type(len_voxel) == int or float else len_voxel
 
-        poly = art3d.Poly3DCollection(faces,
-            facecolors=facecolors[coord],
-            edgecolors=edgecolors[coord],
-            **kwargs
-        )
-        self.add_collection3d(poly)
-        polygons[coord] = poly
+            # Voxel Geometry
+            voxel = pyvista.Cube(center=centers[i],x_length=x_len, y_length=y_len, z_length=z_len)
+            smooth= None
 
-    return polygons
+            # Mesh creation and coloring
+            voxel_color = "#000000"
+            voxel_alpha = 0.0
+            actor = pl.add_mesh(voxel, color=voxel_color, smooth_shading=smooth, opacity=voxel_alpha,show_edges=True if wireframe else False, edge_color=wireframe_color, render=False)
+            voxels.append(actor)
+
+
+        return pl, voxels
 

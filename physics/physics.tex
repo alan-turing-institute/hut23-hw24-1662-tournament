@@ -11,6 +11,12 @@
 %\usepackage[inline]{asymptote}
 %\usepackage{tikz-cd}
 \DeclareFontSeriesDefault[rm]{bf}{sbc}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{booktabs}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{3pt}
+\usepackage{algorithm2e}
 % \usepackage{amssymb}
 %% Turing grid is 21 columns (of 1cm if we are using A4)
 %% Usually 4 "big columns", each of 4 text cols plus 1 gutter col;
@@ -266,12 +272,95 @@ The plant state-machine has available to it the following data:
 \end{figure}
 
   
-  
 \subsubsection{Evaporation}
+
+tbd
 
 \subsubsection{Photosynthesis}
 
+On any illuminated face in full sunlight, per tick, we generate 8
+energy and consume 8 water. In partial sunlight, it's 2 energy
+generated, 2 water consumed. 
+
+\subsubsection{Growth}
+
+If a Plant Block specifies growth from a face:
+\begin{enumerate}
+\item If there is less than 12 energy and 6 water, nothing happens;
+\item If the current block in the specified direction is neither Air
+  nor Earth, nothing happens;
+\item Otherwise, a new Plant block is created adjacent to this one,
+  having 6 water and 6 energy. (6 energy is lost.)
+\item (NB: Any water in an adjacent Earth block is lost. To be fixed.)
+\end{enumerate}
+
+
+\section{A plant}
+
+\subsection{Subroutine: Where are we?}
+
+First, we decide whether we are a ``leaf,'' a ``root tip,'' or ``shoot.''
+\begin{enumerate}
+\item If Up is Earth, we are underground. Grow Upwards and jump to
+  step \ref{step:isdownearth}. (If we can't grow upwards, we're
+  doomed.)
+\item If Up is Air, then we are a leaf. Jump to the Leaf
+  subroutine;
+\item Otherwise, if Down is Earth, then we are a root tip. Jump to the
+  Root Tip subroutine;\label{step:isdownearth}
+\item Otherwise, we're shoot (probably). Jump to the Shoot subroutine.
+\end{enumerate}
+
+\subsection{Subroutine: Leaf}
+
+If we're a leaf, we need to photosynthesise and push energy
+downwards. I'm assuming a minimum necessary energy is 5. Who knows? 
+\begin{enumerate}
+\item Ensure top and side permeabilities are set to maximum.
+\item If $\text{StoredEnergy} > 5$ then Send Energy Downwards in the
+  amount of $\text{StoredEnergy} - 5$. 
+\item Loop this subroutine.
+\end{enumerate}
+
+\subsection{Subroutine: Root Tip}
+
+The challenge here is to decide whether we should grow downwards or
+not. Roughly, we should, if (a) we can and (b) there's not a lot of
+water here. If there's enough water, we should pump it upwards (I'm
+not sure by how much).
+
+\begin{enumerate}
+\item If the pressure difference in the block above is more than the
+  pressure here minus 10, turn on top face pump to maximum.
+\item For each side face, if the water pressure that face is more than
+  10 greater than the pressure in this block, then open that face;
+  otherwise close that face. 
+\item If any face is open, then loop this subroutine.
+\item If no faces are open, grow down and go back to Where Are We?
+\end{enumerate}
+
+\subsection{Subroutine: Shoot}
+
+We're in the middle. Just pump water upwards and move energy downwards. 
+
+\begin{enumerate}
+\item Open top and bottom faces.
+\item If the pressure above is more than the pressure here minus 10,
+  turn on top face pump to maximum. (Otherwise we'll let the pressure
+  difference pump the water.)
+\item Move half the stored energy in this block downwards.
+\end{enumerate}
+
+
+\section{Plantlang}
+
+\begin{tabularx}{\columnwidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+  \toprule
+
+  \texttt{move} & Move somewhere \\
   
+
+\end{tabularx}
 
 
 
@@ -282,6 +371,8 @@ The plant state-machine has available to it the following data:
 \item It takes energy to change the direction and strength of the face
   pumps. 
 \item Generators (like pumps, but in reverse).
+\item Data structures are represented as small integers (and can
+  therefore be hacked).
 \end{itemize}
 
 

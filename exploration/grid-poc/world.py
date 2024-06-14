@@ -78,7 +78,7 @@ class Grid():
             z = A * np.exp(-((x - x0) ** 2 / (2 * sigma_x ** 2) + (y - y0) ** 2 / (2 * sigma_y ** 2)))
         
             return (x, y, z)
-        gauss_x, gauss_y, gauss_z = gaussian_surface_3d(grid_size=self.width, A=(3*self.height)/4, x0=0, y0=0)
+        gauss_x, gauss_y, gauss_z = gaussian_surface_3d(grid_size=int(self.width * 2), A=(2.5 * self.height) / 4, x0=5, y0=5)
         fertile = []
         for x in range(self.width):
             row = []
@@ -91,11 +91,11 @@ class Grid():
                         # xnorm = (x - (self.width / 2.0) / (self.width / 2.0))
                         # ynorm = (y - (self.depth / 2.0) / (self.depth / 2.0))
                         znorm = (z - (self.height / 2.0) / (self.height / 2.0))
-                        height = gauss_z[x][y]
+                        height = gauss_z[x][y] - 1
                         # height = 0.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
                         if znorm < height:
                             column.append(Rock())
-                        elif znorm < height + 3:
+                        elif znorm < height + 2:
                             column.append(Soil())
                             fertile.append((x,y,z))
                         else:
@@ -115,7 +115,7 @@ class Grid():
         # (cloud_x, cloud_y, cloud_z) = fertile[cloud_seed]
     
         (highest_x,highest_y,highest_z) = find_highest_point(fertile)
-        self.grid[highest_x][highest_y][highest_z].water = 128
+        self.grid[highest_x][highest_y][highest_z].water = 8192
         
         def find_topsoil(fertile, x, y):
             (highest_x,highest_y,highest_z) = (0,0,0)
@@ -126,10 +126,11 @@ class Grid():
                         (highest_x,highest_y,highest_z)=cell
             return (highest_x,highest_y,highest_z)
 
-        plant_seed = random.randint(0,len(fertile))
-        (seed_x, seed_y, seed_z) = fertile[plant_seed]
-        (topsoil_x,topsoil_y,topsoil_z) = find_topsoil(fertile, seed_x, seed_y)
-        self.grid[topsoil_x][topsoil_y][topsoil_z] = Plant()
+        for _ in range(16):
+            plant_seed = random.randint(0, len(fertile))
+            (seed_x, seed_y, seed_z) = fertile[plant_seed]
+            (topsoil_x, topsoil_y, topsoil_z) = find_topsoil(fertile, seed_x, seed_y)
+            self.grid[topsoil_x][topsoil_y][topsoil_z] = Plant()
 
         for x in range(self.width):
             for y in range(self.depth):
@@ -303,8 +304,10 @@ class Grid():
                 for z in range(self.height):
                     direction = self.reproduce[x][y][z]
                     if direction != None:
-                        self.grid[x][y][z] = copy.deepcopy(self.neighbour(x, y, z, direction))
-                        self.grid[x][y][z]
+                        child = copy.deepcopy(self.neighbour(x, y, z, direction))
+                        self.grid[x][y][z] = child
+                        child.water = 0
+                        child.energy = 0
                     self.reproduce[x][y][z] = False
 
     def update(self):
@@ -335,7 +338,7 @@ class Grid():
                     for y in range(self.depth):
                         for z in range(self.height):
                             self.colours[x][y][z] = self.grid[x][y][z].colour
-            sleep(0.1)
+            #sleep(0.1)
 
     def start_grid_thread(self):
         self.render_lock = Lock()
@@ -360,23 +363,20 @@ class Grid():
 
     def main(self):
         print("Preparing grid world...")
-        random.seed(1)
+        random.seed(4)
         self.populate()
 
         # Create the scene
         pl, self.voxels = vxm.draw(self.width, self.depth, self.height)
-        pl.add_callback(lambda : self.update_colours(), interval=1000)
+        pl.add_callback(lambda : self.update_colours(), interval=50)
         print("...Prepared")
 
         self.start_grid_thread()
+        pl.show()
 
-        print("...Prepared")
-        self.start_grid_thread()
-        print("...Prepared2")
         while True:
             pl.render()
             pl.app.processEvents()
-            pl.show()
 
 if __name__ == "__main__":
     grid = Grid()

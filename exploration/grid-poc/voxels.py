@@ -26,9 +26,16 @@ def draw(width, depth, height):
     xx, yy, zz, voxid = np.array([ [*i,1*array[tuple(i)]] for i in np.argwhere(array)]).T
     centres = np.vstack((xx.ravel(), yy.ravel(), zz.ravel())).T
 
-    pl = pvqt.BackgroundPlotter()
+    pl = pvqt.BackgroundPlotter(title="Plantworld")
     pl.background_color = "#cccccc"
     pl.view_isometric()
+    pl.enable_eye_dome_lighting()
+
+    pl.camera_position = [
+        (30.0, 45.0, 35.0),
+        (2.0, 0.0, -5.0),
+        (0.0, 0.0, 1.0)
+    ]
 
     voxels = []
     for pos in range(len(centres)):

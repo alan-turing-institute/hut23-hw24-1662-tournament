@@ -106,10 +106,11 @@ class Cell(States):
             self.flux[direction] = (water_pressure[direction])
 
     def update_flux(self):
+        self.flux = [max(flux, 0) for flux in self.flux]
         new_flux = [0] * 6
         total = 0
         water_orig = self.water
-        while total < water_orig and max(self.flux) > 0:
+        while total < water_orig and max(self.flux) > 0 and self.water > 0:
             pos = self.flux.index(max(self.flux))
             if self.water > self.flux[pos]:
                 new_flux[pos] = self.flux[pos]
@@ -150,7 +151,7 @@ class Air(Cell):
     def apply_flux(self, water_incoming, energy_incoming):
         if water_incoming > 0:
             print("ERROR: {}".format(water_incoming))
-            exit()
+            #exit()
         self.energy += energy_incoming
 
 def interpolate(col1, col2, s):
@@ -158,8 +159,7 @@ def interpolate(col1, col2, s):
         (col2[0] * s) + (col1[0] * (1 - s)),
         (col2[1] * s) + (col1[1] * (1 - s)),
         (col2[2] * s) + (col1[2] * (1 - s)),
-        #(col2[3] * s) + (col1[3] * (1 - s)),
-        s if s > 0.2 else 0.2
+        min(s, 0.8) if s > 0.2 else 0.2
     )
 
 class Soil(Cell):
@@ -168,12 +168,12 @@ class Soil(Cell):
 
     def __init__(self):
         super().__init__()
-        self.water = 0 #random.randint(1, 10)
+        self.water = 0
 
     def update(self, grid):
-        scale = min(self.water, 1.0) / 1.0
+        scale = min(self.water / 16.0, 1.0) / 1.0
         rock = (0.8, 0.3, 0.0, 0.8)
-        water = (0.075, 0.416, 0.936, 0.8)
+        water = (0.075, 0.416, 0.636, 0.8)
 
         self.colour = interpolate(rock, water, scale)
 
@@ -198,7 +198,7 @@ class Rock(Cell):
     def apply_flux(self, water_incoming, energy_incoming):
         if water_incoming > 0:
             print("ERROR: {}".format(water_incoming))
-            exit()
+            #exit()
         self.energy += energy_incoming
 
 

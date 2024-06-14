@@ -65,11 +65,11 @@ class Plant(Cell):
 
         if self.get_neighbour(Direction.ABOVE.value) == CellType.AIR:
             # We're a leaf!
-            self.colour = (1.0, 0.4, 0,4, 1.0)
-            print("Water leaf: {}, {}".format(self.water, self.energy))
+            self.colour = (0.7, max(0.4 - 0.4 * (self.water / 7), 0.0), 0,4, 1.0)
+            #print("Water leaf: {}, {}".format(self.water, self.energy))
             if self.energy > 5 and self.get_neighbour(Direction.BELOW.value) == CellType.PLANT:
                 self.action_send_energy(min(self.energy - 5, 5), Direction.BELOW)
-            if self.get_neighbour(Direction.BELOW.value) == CellType.SOIL:
+            if self.get_neighbour(Direction.BELOW.value) == CellType.SOIL and self.energy > 30 and self.water > 5:
                 self.action_reproduce(Direction.BELOW)
             if earth_contact and self.energy > 30 and self.water > 7:
                 self.action_reproduce(Direction.ABOVE)
@@ -78,21 +78,19 @@ class Plant(Cell):
         elif self.get_neighbour(Direction.ABOVE.value) == CellType.PLANT and self.get_neighbour(Direction.BELOW.value) == CellType.PLANT:
             # We're a shoot!
             self.colour = (0.2, 0.8, 0,4, 1.0)
-            print("Water shoot: {}, {}".format(self.water, self.energy))
+            #print("Water shoot: {}, {}".format(self.water, self.energy))
             if self.energy > 10:
                 self.action_pump(Direction.ABOVE.value, 8)
                 self.action_pump(Direction.BELOW.value, -8)
-            print("Push up 1")
         elif self.get_neighbour(Direction.ABOVE.value) == CellType.PLANT and self.get_neighbour(Direction.BELOW.value) != CellType.PLANT:
             # We're a root!
             self.colour = (0.4, 0.8, 0,4, 1.0)
-            print("Water root: {}, {}".format(self.water, self.energy))
-            if self.get_neighbour(Direction.BELOW.value) == CellType.SOIL:
+            #print("Water root: {}, {}".format(self.water, self.energy))
+            if self.get_neighbour(Direction.BELOW.value) == CellType.SOIL and self.energy > 30 and self.water > 5:
                 self.action_reproduce(Direction.BELOW)
-            if self.get_neighbour(Direction.ABOVE.value) != CellType.PLANT:
+            if self.get_neighbour(Direction.ABOVE.value) != CellType.PLANT and self.energy > 30 and self.water > 7:
                 self.action_reproduce(Direction.ABOVE)
             if self.energy > 10:
                 self.action_pump(Direction.ABOVE.value, 8)
-            print("Push up 2")
 
 

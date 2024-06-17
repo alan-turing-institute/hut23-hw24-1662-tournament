@@ -7,7 +7,8 @@
 # Plants
 
 import copy
-from cells import (
+
+from src.cells import (
     Direction,
     Cell,
     CellType,

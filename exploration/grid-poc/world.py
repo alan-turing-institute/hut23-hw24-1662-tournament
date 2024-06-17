@@ -12,10 +12,12 @@ import math
 import copy
 import random
 from math import floor
-import voxels as vxm
 from threading import Thread, Lock
 from typing import Tuple
-from cells import (
+
+import src.voxels as vxm
+
+from src.cells import (
     Direction,
     State,
     States,
@@ -26,11 +28,11 @@ from cells import (
     CellType,
 )
 
-from plants import (
+from src.plants import (
     Plant,
 )
 
-from utils import (
+from src.utils import (
     opposite,
 )
 

@@ -6,7 +6,7 @@
 
 # Utilities
 
-from cells import (
+from src.cells import (
     Direction,
 )
 

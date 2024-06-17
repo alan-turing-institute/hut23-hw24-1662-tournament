@@ -30,21 +30,16 @@ from plants import (
     Plant,
 )
 
-def opposite(direction):
-    return [
-        Direction.RIGHT,
-        Direction.LEFT,
-        Direction.ABOVE,
-        Direction.BELOW,
-        Direction.BEHIND,
-        Direction.FRONT
-    ][direction]
+from utils import (
+    opposite,
+)
 
 class Grid():
     width = 16
     depth = 16
     height = 8
 
+    """ Holds the data for the cells in the world"""
     grid = []
     energies = []
     reproduce = []
@@ -54,7 +49,18 @@ class Grid():
     colours = []
 
     def populate(self):
+        """
+        Populate the world grid with suitable content.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+
         self.grid = []
+
         def gaussian_surface_3d(grid_size: int = self.width, A: float = self.height, x0: float = 0, y0: float = 0, 
                         sigma_x: float = 2.5, sigma_y: float = 2.5) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
             """
@@ -74,10 +80,11 @@ class Grid():
             x = np.linspace(0, grid_size - 1, grid_size)
             y = np.linspace(0, grid_size - 1, grid_size)
             x, y = np.meshgrid(x, y)
-            
+
             z = A * np.exp(-((x - x0) ** 2 / (2 * sigma_x ** 2) + (y - y0) ** 2 / (2 * sigma_y ** 2)))
-        
+
             return (x, y, z)
+
         gauss_x, gauss_y, gauss_z = gaussian_surface_3d(grid_size=int(self.width * 2), A=(2.5 * self.height) / 4, x0=5, y0=5)
         fertile = []
         for x in range(self.width):
@@ -104,34 +111,42 @@ class Grid():
             self.grid.append(row)
 
         def find_highest_point(fertile):
+            """
+            Find the highest point in the list of fertile locations
+            """
             (highest_x,highest_y,highest_z) = (0,0,0)
             for cell in fertile:
-                (cell_x,cell_y,cell_z) = cell
+                (cell_x, cell_y, cell_z) = cell
                 if cell_z > highest_z:
-                    (highest_x,highest_y,highest_z)=cell
-            return (highest_x,highest_y,highest_z)
-        
+                    (highest_x, highest_y, highest_z) = cell
+            return (highest_x, highest_y, highest_z)
+
         # cloud_seed = random.randint(0,len(fertile))
         # (cloud_x, cloud_y, cloud_z) = fertile[cloud_seed]
-    
+
         (highest_x,highest_y,highest_z) = find_highest_point(fertile)
         self.grid[highest_x][highest_y][highest_z].water = 8192
-        
+
         def find_topsoil(fertile, x, y):
-            (highest_x,highest_y,highest_z) = (0,0,0)
+            """
+            Find the highest point on the map that's also soil
+            """
+            (highest_x, highest_y, highest_z) = (0, 0, 0)
             for cell in fertile:
-                (cell_x,cell_y,cell_z) = cell
+                (cell_x, cell_y, cell_z) = cell
                 if (cell_x == x) and (cell_y == y):
                     if cell_z > highest_z:
-                        (highest_x,highest_y,highest_z)=cell
-            return (highest_x,highest_y,highest_z)
+                        (highest_x, highest_y, highest_z) = cell
+            return (highest_x, highest_y, highest_z)
 
+        # Place seeds on the map
         for _ in range(16):
             plant_seed = random.randint(0, len(fertile))
             (seed_x, seed_y, seed_z) = fertile[plant_seed]
             (topsoil_x, topsoil_y, topsoil_z) = find_topsoil(fertile, seed_x, seed_y)
             self.grid[topsoil_x][topsoil_y][topsoil_z] = Plant()
 
+        # Set rock to have "infinite" water pressure
         for x in range(self.width):
             for y in range(self.depth):
                 for z in range(self.height):
@@ -142,6 +157,7 @@ class Grid():
                             neighbour = self.neighbour(x, y, z, direction)
                             neighbour.water_pressure_external[reverse] = 10000.0
 
+        # Create a grid to store energy values
         for x in range(self.width):
             row = []
             for y in range(self.depth):
@@ -151,6 +167,7 @@ class Grid():
                 row.append(column)
             self.energies.append(row)
 
+        # Create a grid to store reproduction intention
         for x in range(self.width):
             row = []
             for y in range(self.depth):
@@ -160,6 +177,7 @@ class Grid():
                 row.append(column)
             self.reproduce.append(row)
 
+        # Create a grid to store cell colours
         for x in range(self.width):
             row = []
             for y in range(self.depth):
@@ -170,12 +188,49 @@ class Grid():
             self.colours.append(row)
 
     def cell(self, x, y, z):
+        """
+        Returns the data structure for a cell
+
+        Returns a reference to the Cell object for the given grid location. The
+        co-ordinates wrap in all directions.
+
+        Args:
+            x, y, z: the co-ordinate of the cell
+
+        Returns:
+            Cell data structure
+        """
         return self.grid[x % self.width][y % self.depth][z % self.height]
 
     def energy(self, x, y, z):
+        """
+        Returns the energy for a cell
+
+        Returns the quantity of energy stored in a cell. The co-ordinates wrap
+        in all directions.
+
+        Args:
+            x, y, z: the co-ordinate of the cell
+
+        Returns:
+            The energy stored in the cell
+        """
         return self.energies[x % self.width][y % self.depth][z % self.height]
 
     def neighbour(self, x, y, z, direction):
+        """
+        Returns the neighbour of a cell in a given direction.
+
+        Provided a cell and a direction, returns the neighbour of that cell in
+        the given direction.
+
+        Args:
+            x, y, z: the co-ordinate of the cell
+            direction: an instance of the Direction enum
+
+        Returns:
+            Neighbouring Cell data structure
+        """
         if direction == Direction.LEFT.value:
             x = x - 1
         elif direction == Direction.RIGHT.value:
@@ -197,6 +252,27 @@ class Grid():
         return self.grid[x][y][z]
 
     def fight(self, x, y, z):
+        """
+        Returns the result of a Plant cell's reproduction action.
+
+        In the event that a Cell wants to reproduce it aims to copy itself into
+        an adjacent cell the reproducing cell must fight the incumbant cell
+        and any other Plants simultaneously aiming to reproduce into the same
+        cell.
+
+        This method returns the result of that fight, in other words, tells us
+        which if the cells succeeds in reproducing into the cell.
+
+        The reproducing cells will have already indicated their intention to
+        reproduce by recording the fact in their respective self.reproduce[]
+        arrays.
+
+        Args:
+            x, y, z: the cell into which the reproducting is to occur
+
+        Returns:
+            The direction from which the reproduction can occur, or None
+        """
         cell = self.cell(x, y, z)
         energy_max = cell.energy
         best = None
@@ -216,6 +292,9 @@ class Grid():
 
 
     def preupdate(self):
+        """
+        All updates that must happen before the main Cell update
+        """
         # Copy outgoing edge state to incoming edge state
         for x in range(self.width):
             for y in range(self.depth):
@@ -237,6 +316,9 @@ class Grid():
                     cell.update_sunlight()
 
     def postupdate(self):
+        """
+        All updates that must happen after the main Cell update
+        """
         # Transfer the pressures
         for x in range(self.width):
             for y in range(self.depth):
@@ -311,8 +393,14 @@ class Grid():
                     self.reproduce[x][y][z] = False
 
     def update(self):
+        """
+        The main update calls
+
+        Calls the pre update, then the main update, then the post update cycle.
+        """
         self.preupdate()
 
+        # Perform the main Cell update cycle
         for x in range(self.width):
             for y in range(self.depth):
                 for z in range(self.height):
@@ -322,14 +410,27 @@ class Grid():
         self.postupdate()
 
     def display_slice(self, z):
+        """
+        Output a slice of the world to the console.
+
+        Prints the specified horizontal slice of the world to the console
+        using ASCII characters.
+
+        Useful for debugging.
+        """
         for y in range(self.depth):
             line = ''
             for x in range(self.width):
                 character = str(self.grid[x][y][z].water)
                 line += "{:3} ".format(character)
             print(line)
-            
+
     def grid_update(self):
+        """
+        Perform the main update loop for the GridWorld
+
+        This is separate from the rendering and user intear
+        """
         input("Press Enter to continue...")
         while True:
             self.update()
@@ -341,11 +442,26 @@ class Grid():
             #sleep(0.1)
 
     def start_grid_thread(self):
+        """
+        Start the world update thread.
+
+        Starts the thread used for updating the world based on the Gridworld
+        physics rules.
+        """
         self.render_lock = Lock()
         t = Thread(target=lambda : self.grid_update(), args=[])
         t.start()
 
     def update_colours(self):
+        """
+        Updates the colours in the render grid.
+
+        Transfers the colours from the cells over to the mesh grid for
+        rendering.
+
+        This is threadsafe, but will potentially block the render thread so
+        should be kept as fast as possible.
+        """
         with self.render_lock:
             count = 0
             for x in range(self.width):
@@ -362,6 +478,12 @@ class Grid():
                         count += 1
 
     def main(self):
+        """
+        Main execution thread.
+
+        Spawns a thread to perform the update. The main thread is used to
+        manage the user interface and rendering.
+        """
         print("Preparing grid world...")
         random.seed(4)
         self.populate()
@@ -379,6 +501,9 @@ class Grid():
             pl.app.processEvents()
 
 if __name__ == "__main__":
+    """
+    Gridworld entry point
+    """
     grid = Grid()
     grid.main()
 

@@ -31,11 +31,11 @@ def draw(width, depth, height):
     pl.view_isometric()
     pl.enable_eye_dome_lighting()
 
-    pl.camera_position = [
-        (30.0, 45.0, 35.0),
-        (2.0, 0.0, -5.0),
-        (0.0, 0.0, 1.0)
-    ]
+#    pl.camera_position = [
+#        (30.0, 45.0, 35.0),
+#        (2.0, 0.0, -5.0),
+#        (0.0, 0.0, 1.0)
+#    ]
 
     voxels = []
     for pos in range(len(centres)):

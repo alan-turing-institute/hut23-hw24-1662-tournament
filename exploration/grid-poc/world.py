@@ -50,6 +50,81 @@ class Grid():
     render_lock = None
     colours = []
 
+    def fill(self, where, what):
+        """
+        Create a three dimensional array of 'what's and store them in 'where'
+
+        Args:
+            where a variable to store the resulting three dimensional list
+            what a function to call that returns the item to store in each cell
+        """
+        for x in range(self.width):
+            row = []
+            for y in range(self.depth):
+                column = []
+                for z in range(self.height):
+                    item = what(x, y, z)
+                    column.append(item)
+                row.append(column)
+            where.append(row)
+
+    def apply(self, what):
+        """
+        Apply a function to every cell in the three dimensional grid
+
+        The function must accept four parameters: cell, x, y, z.
+
+        Args:
+            what function to apply to every cell in the grid
+        """
+        for x in range(self.width):
+            for y in range(self.depth):
+                for z in range(self.height):
+                    cell = self.cell(x, y, z)
+                    what(cell, x, y, z)
+
+    def fill_land(self, fertile, gauss_z, x, y, z):
+        """
+        The function used to fill the land
+
+        Returns an object to store in each cell of the grid.
+
+        Args:
+            fertile array to store locations of fertile soil
+            gauss_z height of the guassian curve at this point
+            x, y, z position in the grid
+        """
+        if z == 0:
+            item = Rock()
+        else:
+            # xnorm = (x - (self.width / 2.0) / (self.width / 2.0))
+            # ynorm = (y - (self.depth / 2.0) / (self.depth / 2.0))
+            znorm = (z - (self.height / 2.0) / (self.height / 2.0))
+            height = gauss_z[x][y] - 1
+            # height = 0.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
+            if znorm < height:
+                item = Rock()
+            elif znorm < height + 2:
+                item = Soil()
+                fertile.append((x, y, z))
+            else:
+                item = Air()
+        return item
+
+    def init_pressure(self, cell, x, y, z):
+        """
+        Initialise the pressur values in teh grid
+
+        Args:
+            cell to apply the pressure values to
+            x, y, z position in the grid
+        """
+        if cell.cell_type == CellType.ROCK:
+            for direction in range(len(Direction)):
+                reverse = opposite(direction).value
+                neighbour = self.neighbour(x, y, z, direction)
+                neighbour.water_pressure_external[reverse] = 10000.0
+
     def populate(self):
         """
         Populate the world grid with suitable content.
@@ -89,34 +164,13 @@ class Grid():
 
         gauss_x, gauss_y, gauss_z = gaussian_surface_3d(grid_size=int(self.width * 2), A=(2.5 * self.height) / 4, x0=5, y0=5)
         fertile = []
-        for x in range(self.width):
-            row = []
-            for y in range(self.depth):
-                column = []
-                for z in range(self.height):
-                    if z == 0:
-                        column.append(Rock())
-                    else:
-                        # xnorm = (x - (self.width / 2.0) / (self.width / 2.0))
-                        # ynorm = (y - (self.depth / 2.0) / (self.depth / 2.0))
-                        znorm = (z - (self.height / 2.0) / (self.height / 2.0))
-                        height = gauss_z[x][y] - 1
-                        # height = 0.0 + (2.0 * math.sin(0.13 * math.pi * xnorm) + math.cos(0.1 * math.pi * ynorm))
-                        if znorm < height:
-                            column.append(Rock())
-                        elif znorm < height + 2:
-                            column.append(Soil())
-                            fertile.append((x,y,z))
-                        else:
-                            column.append(Air())
-                row.append(column)
-            self.grid.append(row)
+        self.fill(self.grid, lambda x, y, z: self.fill_land(fertile, gauss_z, x, y, z))
 
         def find_highest_point(fertile):
             """
             Find the highest point in the list of fertile locations
             """
-            (highest_x,highest_y,highest_z) = (0,0,0)
+            (highest_x, highest_y, highest_z) = (0,0,0)
             for cell in fertile:
                 (cell_x, cell_y, cell_z) = cell
                 if cell_z > highest_z:
@@ -148,46 +202,18 @@ class Grid():
             (topsoil_x, topsoil_y, topsoil_z) = find_topsoil(fertile, seed_x, seed_y)
             self.grid[topsoil_x][topsoil_y][topsoil_z] = Plant()
 
+
         # Set rock to have "infinite" water pressure
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.grid[x][y][z]
-                    if cell.cell_type == CellType.ROCK:
-                        for direction in range(len(Direction)):
-                            reverse = opposite(direction).value
-                            neighbour = self.neighbour(x, y, z, direction)
-                            neighbour.water_pressure_external[reverse] = 10000.0
+        self.apply(lambda cell, x, y, z: self.init_pressure(cell, x, y, z))
 
         # Create a grid to store energy values
-        for x in range(self.width):
-            row = []
-            for y in range(self.depth):
-                column = []
-                for z in range(self.height):
-                    column.append(0)
-                row.append(column)
-            self.energies.append(row)
+        self.fill(self.energies, lambda x, y, z: 0)
 
         # Create a grid to store reproduction intention
-        for x in range(self.width):
-            row = []
-            for y in range(self.depth):
-                column = []
-                for z in range(self.height):
-                    column.append(None)
-                row.append(column)
-            self.reproduce.append(row)
+        self.fill(self.reproduce, lambda x, y, z: None)
 
         # Create a grid to store cell colours
-        for x in range(self.width):
-            row = []
-            for y in range(self.depth):
-                column = []
-                for z in range(self.height):
-                    column.append((0.0, 0.0, 0.0, 0.0))
-                row.append(column)
-            self.colours.append(row)
+        self.fill(self.colours, lambda x, y, z: (0.0, 0.0, 0.0, 0.0))
 
     def cell(self, x, y, z):
         """
@@ -293,106 +319,144 @@ class Grid():
             self.reproduce[x][y][z] = None
 
 
+    def apply_message_pass(self, cell, x, y, z):
+        """
+        Pass messages between cells
+
+        This is applied to every cell every tick of the clock.
+
+        Args:
+            cell to apply to
+            x, y, z position in the grid
+        """
+        cell.incoming[Direction.LEFT.value] = self.cell(x - 1, y, z).outgoing[Direction.RIGHT.value]
+        cell.incoming[Direction.RIGHT.value] = self.cell(x + 1, y, z).outgoing[Direction.LEFT.value]
+        cell.incoming[Direction.FRONT.value] = self.cell(x, y - 1, z).outgoing[Direction.BEHIND.value]
+        cell.incoming[Direction.BEHIND.value] = self.cell(x, y + 1, z).outgoing[Direction.FRONT.value]
+        cell.incoming[Direction.BELOW.value] = self.cell(x, y, z - 1).outgoing[Direction.ABOVE.value]
+        cell.incoming[Direction.ABOVE.value] = self.cell(x, y, z + 1).outgoing[Direction.BELOW.value]
+        cell.neighbour_type[Direction.LEFT.value] = self.cell(x - 1, y, z).cell_type
+        cell.neighbour_type[Direction.RIGHT.value] = self.cell(x + 1, y, z).cell_type
+        cell.neighbour_type[Direction.FRONT.value] = self.cell(x, y - 1, z).cell_type
+        cell.neighbour_type[Direction.BEHIND.value] = self.cell(x, y + 1, z).cell_type
+        cell.neighbour_type[Direction.BELOW.value] = self.cell(x, y, z - 1).cell_type
+        cell.neighbour_type[Direction.ABOVE.value] = self.cell(x, y, z + 1).cell_type
+        cell.update_water()
+        cell.update_sunlight()
+
+    def apply_pressure(self, cell, x, y, z):
+        """
+        update the pressure values for a cell
+
+        This is applied to every cell every tick of the clock.
+
+        Args:
+            cell to apply to
+            x, y, z position in the grid
+        """
+        if cell.cell_type == CellType.SOIL or cell.cell_type == CellType.PLANT:
+            for direction in range(len(Direction)):
+                reverse = opposite(direction).value
+                neighbour = self.neighbour(x, y, z, direction)
+                if neighbour.cell_type == CellType.SOIL or neighbour.cell_type == CellType.PLANT:
+                    cell.water_pressure_external[direction] = neighbour.flux[reverse]
+                else:
+                    cell.water_pressure_external[direction] = 9999.0
+
+    def apply_resources(self, cell, x, y, z):
+        """
+        Update the resources for a cell
+
+        This is applied to every cell every tick of the clock.
+
+        Args:
+            cell to apply to
+            x, y, z position in the grid
+        """
+        water_incoming = 0
+        energy_incoming = 0
+        for direction in range(len(Direction)):
+            reverse = opposite(direction).value
+            neighbour = self.neighbour(x, y, z, direction)
+            water_incoming += neighbour.flux[reverse]
+            energy_incoming += neighbour.energy_outgoing[reverse]
+            neighbour.energy_outgoing[reverse] = 0
+            #cell.water -= cell.flux[direction]
+            #neighbour.flux[reverse] = 0
+        cell.apply_flux(water_incoming, energy_incoming)
+
+    def apply_reproduce(self, cell, x, y, z):
+        """
+        Update the reproduction status of a cell
+
+        This is applied to every cell every tick of the clock.
+
+        Args:
+            cell to apply to
+            x, y, z position in the grid
+        """
+        direction = self.reproduce[x][y][z]
+        if direction != None:
+            child = copy.deepcopy(self.neighbour(x, y, z, direction))
+            self.grid[x][y][z] = child
+            child.water = 0
+            child.energy = 0
+        self.reproduce[x][y][z] = False
+
+    def apply_flux_reset(self, cell):
+        """
+        Reset the flux of a cell
+
+        This is applied to every cell every tick of the clock.
+
+        Args:
+            cell to apply to
+            x, y, z position in the grid
+        """
+        cell.flux = [0] * len(Direction)
+
+    def apply_colour(self, x, y, z):
+        """
+        Record the colour of a cell for use by the renderer
+
+        This is applied to every cell every tick of the clock.
+
+        Args:
+            cell to apply to
+            x, y, z position in the grid
+        """
+        self.colours[x][y][z] = self.grid[x][y][z].colour
+
     def preupdate(self):
         """
         All updates that must happen before the main Cell update
         """
+
         # Copy outgoing edge state to incoming edge state
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.cell(x, y, z)
-                    cell.incoming[Direction.LEFT.value] = self.cell(x - 1, y, z).outgoing[Direction.RIGHT.value]
-                    cell.incoming[Direction.RIGHT.value] = self.cell(x + 1, y, z).outgoing[Direction.LEFT.value]
-                    cell.incoming[Direction.FRONT.value] = self.cell(x, y - 1, z).outgoing[Direction.BEHIND.value]
-                    cell.incoming[Direction.BEHIND.value] = self.cell(x, y + 1, z).outgoing[Direction.FRONT.value]
-                    cell.incoming[Direction.BELOW.value] = self.cell(x, y, z - 1).outgoing[Direction.ABOVE.value]
-                    cell.incoming[Direction.ABOVE.value] = self.cell(x, y, z + 1).outgoing[Direction.BELOW.value]
-                    cell.neighbour_type[Direction.LEFT.value] = self.cell(x - 1, y, z).cell_type
-                    cell.neighbour_type[Direction.RIGHT.value] = self.cell(x + 1, y, z).cell_type
-                    cell.neighbour_type[Direction.FRONT.value] = self.cell(x, y - 1, z).cell_type
-                    cell.neighbour_type[Direction.BEHIND.value] = self.cell(x, y + 1, z).cell_type
-                    cell.neighbour_type[Direction.BELOW.value] = self.cell(x, y, z - 1).cell_type
-                    cell.neighbour_type[Direction.ABOVE.value] = self.cell(x, y, z + 1).cell_type
-                    cell.update_water()
-                    cell.update_sunlight()
+        self.apply(lambda cell, x, y, z: self.apply_message_pass(cell, x, y, z))
 
     def postupdate(self):
         """
         All updates that must happen after the main Cell update
         """
+
         # Transfer the pressures
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.cell(x, y, z)
-                    if cell.cell_type == CellType.SOIL or cell.cell_type == CellType.PLANT:
-                        for direction in range(len(Direction)):
-                            reverse = opposite(direction).value
-                            neighbour = self.neighbour(x, y, z, direction)
-                            if neighbour.cell_type == CellType.SOIL or neighbour.cell_type == CellType.PLANT:
-                                cell.water_pressure_external[direction] = neighbour.flux[reverse]
-                            else:
-                                cell.water_pressure_external[direction] = 9999.0
+        self.apply(lambda cell, x, y, z: self.apply_pressure(cell, x, y, z))
 
         # Apply the flux constraints
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.cell(x, y, z)
-                    cell.update_flux()
+        self.apply(lambda cell, x, y, z: cell.update_flux())
 
         # Move the water and energy
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.cell(x, y, z)
-                    water_incoming = 0
-                    energy_incoming = 0
-                    for direction in range(len(Direction)):
-                        reverse = opposite(direction).value
-                        neighbour = self.neighbour(x, y, z, direction)
-                        water_incoming += neighbour.flux[reverse]
-                        energy_incoming += neighbour.energy_outgoing[reverse]
-                        neighbour.energy_outgoing[reverse] = 0
-                        #cell.water -= cell.flux[direction]
-                        #neighbour.flux[reverse] = 0
-                    cell.apply_flux(water_incoming, energy_incoming)
+        self.apply(lambda cell, x, y, z: self.apply_resources(cell, x, y, z))
 
-        #print(self.cell(3, 0, 1).flux)
-
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.cell(x, y, z)
-                    cell.flux = [0] * len(Direction)
-                    #cell.pressure_gradient = [0] * len(Direction)
-
-        water = 0
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.cell(x, y, z)
-                    water += cell.water
-        #print("Water: {}".format(water))
+        # Reset the flux values
+        self.apply(lambda cell, x, y, z: self.apply_flux_reset(cell))
 
         # Allow cells to try to reproduce
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    self.fight(x, y, z)
+        self.apply(lambda cell, x, y, z: self.fight(x, y, z))
 
         # Reproduce successful cells
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    direction = self.reproduce[x][y][z]
-                    if direction != None:
-                        child = copy.deepcopy(self.neighbour(x, y, z, direction))
-                        self.grid[x][y][z] = child
-                        child.water = 0
-                        child.energy = 0
-                    self.reproduce[x][y][z] = False
+        self.apply(lambda cell, x, y, z: self.apply_reproduce(cell, x, y, z))
 
     def update(self):
         """
@@ -403,11 +467,7 @@ class Grid():
         self.preupdate()
 
         # Perform the main Cell update cycle
-        for x in range(self.width):
-            for y in range(self.depth):
-                for z in range(self.height):
-                    cell = self.grid[x][y][z]
-                    cell.update(grid)
+        self.apply(lambda cell, x, y, z: cell.update())
 
         self.postupdate()
 

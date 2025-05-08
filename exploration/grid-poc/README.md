@@ -8,7 +8,7 @@ Install the Python packages as listed in teh `requirements.txt` file:
 ```
 $ python3 -m venv venv
 $ . ./venv/bin/activate
-% pip install pip --upgrace
+% pip install pip --upgrade
 $ python3 -r requirements.txt
 ```
 

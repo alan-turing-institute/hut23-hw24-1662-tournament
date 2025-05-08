@@ -7,7 +7,8 @@
 # Plants
 
 import copy
-from cells import (
+
+from src.cells import (
     Direction,
     Cell,
     CellType,
@@ -53,7 +54,7 @@ class Plant(Cell):
             self.flux[direction] = (water_pressure[direction])
             self.pressure_gradient[direction] = 0.0
 
-    def update(self, grid):
+    def update(self):
         earth_contact = (
             (self.get_neighbour(Direction.LEFT.value) == CellType.SOIL)
             or (self.get_neighbour(Direction.RIGHT.value) == CellType.SOIL)

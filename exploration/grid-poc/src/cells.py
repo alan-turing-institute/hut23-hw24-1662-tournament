@@ -128,7 +128,7 @@ class Cell(States):
         self.water += water_incoming
         self.energy += energy_incoming
 
-    def update(self, grid):
+    def update(self):
         pass
 
 class Air(Cell):
@@ -145,7 +145,7 @@ class Air(Cell):
     def update_flux(self):
         pass
 
-    def update(self, grid):
+    def update(self):
         pass
 
     def apply_flux(self, water_incoming, energy_incoming):
@@ -170,7 +170,7 @@ class Soil(Cell):
         super().__init__()
         self.water = 0
 
-    def update(self, grid):
+    def update(self):
         scale = min(self.water / 16.0, 1.0) / 1.0
         rock = (0.8, 0.3, 0.0, 0.8)
         water = (0.075, 0.416, 0.636, 0.8)
@@ -192,7 +192,7 @@ class Rock(Cell):
     def update_flux(self):
         pass
 
-    def update(self, grid):
+    def update(self):
         pass
 
     def apply_flux(self, water_incoming, energy_incoming):
